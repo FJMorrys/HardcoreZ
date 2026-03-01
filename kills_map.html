@@ -1,0 +1,255 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>DayZ PvE Kill Map</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<style>
+#map {
+    height: 100vh;
+    background:#111;
+}
+
+.control-box {
+    position:absolute;
+    top:20px;
+    right:20px;
+    background:rgba(0,0,0,0.85);
+    padding:15px;
+    border-radius:10px;
+    color:white;
+    z-index:1000;
+}
+
+.stats-box {
+    position:absolute;
+    top:20px;
+    left:20px;
+    background:rgba(0,0,0,0.9);
+    padding:15px;
+    border-radius:10px;
+    color:white;
+    z-index:1000;
+    min-width:220px;
+}
+
+.legend {
+    position:absolute;
+    bottom:20px;
+    left:20px;
+    background:rgba(0,0,0,0.9);
+    border-radius:10px;
+    color:white;
+    z-index:1000;
+    font-size:13px;
+    width:220px;
+    box-shadow:0 0 20px rgba(0,0,0,0.6);
+    overflow:hidden;
+    transition:all 0.3s ease;
+}
+
+.legend-header {
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:10px 12px;
+    cursor:pointer;
+    background:rgba(255,255,255,0.05);
+}
+
+.legend-header button {
+    background:none;
+    border:none;
+    color:white;
+    font-size:16px;
+    cursor:pointer;
+}
+
+.legend-content {
+    padding:12px;
+}
+
+.legend.collapsed .legend-content {
+    display:none;
+}
+
+.dot {
+    display:inline-block;
+    width:14px;
+    height:14px;
+    border-radius:50%;
+    margin-right:6px;
+    border:2px solid white;
+}
+
+.pink { background:#ff4da6; }
+.blue { background:#3399ff; }
+.green { background:#33ff77; }
+.gold { background:#FFD700; }
+
+.line-symbol {
+    display:inline-block;
+    width:25px;
+    height:3px;
+    background:white;
+    margin-right:6px;
+}
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div class="stats-box">
+<b>Statistiky</b><br><br>
+Killy: <span id="killCount">0</span><br>
+Nejdelší střela: <span id="longestShot">0</span> m
+</div>
+
+<div class="control-box">
+<b>Filtr hráče</b><br><br>
+<select id="playerFilter">
+<option value="all">Všichni</option>
+<option value="Anetka">Anetka</option><option value="FJMorrys">FJMorrys</option>
+</select>
+<br><br>
+<label>
+<input type="checkbox" id="toggleLines" checked>
+Zobrazit trajektorie
+</label>
+</div>
+
+<div class="legend" id="legendBox">
+    <div class="legend-header">
+        <span>Legenda</span>
+        <button id="toggleLegend">−</button>
+    </div>
+    <div class="legend-content" id="legendContent">
+        <span class="dot pink"></span> Anetka<br>
+        <span class="dot blue"></span> FJMorrys<br>
+        <span class="dot green"></span> Ostatní<br>
+        <span class="dot gold"></span> Nejdelší střela<br><br>
+        <span class="line-symbol"></span> Trajektorie střely
+    </div>
+</div>
+
+<script>
+
+var map = L.map('map', {
+    crs:L.CRS.Simple,
+    minZoom:-4,
+    maxZoom:6,
+    zoomControl:false
+});
+
+L.control.zoom({position:'bottomright'}).addTo(map);
+
+var bounds=[[0,0],[15360,15360]];
+L.imageOverlay('mapa.jpeg',bounds).addTo(map);
+map.fitBounds(bounds);
+
+var kills = [{"victim": "Helga", "killer": "FJMorrys", "weapon": "CR-550 Savanna", "distance": 93.7139, "victim_coords": [6217.365234, 13243.398438], "killer_coords": [6241.089844, 13152.936523]}, {"victim": "Eva", "killer": "FJMorrys", "weapon": "CR-550 Savanna", "distance": 63.8891, "victim_coords": [6506.946777, 13172.142578], "killer_coords": [6473.215332, 13120.513672]}, {"victim": "Quinn", "killer": "Anetka", "weapon": "Blaze", "distance": 7.94001, "victim_coords": [6493.618652, 13113.708984], "killer_coords": [6487.125, 13110.176758]}, {"victim": "Niki", "killer": "FJMorrys", "weapon": "CR-550 Savanna", "distance": 83.5407, "victim_coords": [6481.278809, 13236.154297], "killer_coords": [6485.413086, 13153.81543]}, {"victim": "Irena", "killer": "FJMorrys", "weapon": "KAS-74U", "distance": 30.2613, "victim_coords": [4417.851563, 7033.039551], "killer_coords": [4410.87793, 7003.62793]}, {"victim": "Linda", "killer": "FJMorrys", "weapon": "CR-550 Savanna", "distance": 103.22, "victim_coords": [4301.317871, 7077.05127], "killer_coords": [4205.748047, 7038.907227]}, {"victim": "Denis", "killer": "FJMorrys", "weapon": "CR-550 Savanna", "distance": 97.9121, "victim_coords": [4301.591797, 7083.628418], "killer_coords": [4210.17627, 7049.923828]}, {"victim": "Judy", "killer": "FJMorrys", "weapon": "Blaze", "distance": 174.87, "victim_coords": [5344.537598, 10065.650391], "killer_coords": [5246.597656, 9921.069336]}, {"victim": "Gabi", "killer": "Anetka", "weapon": "KA-M", "distance": 75.7143, "victim_coords": [5350.1875, 10073.293945], "killer_coords": [5292.818848, 10024.157227]}, {"victim": "Jose", "killer": "FJMorrys", "weapon": "Blaze", "distance": 20.0797, "victim_coords": [6619.511719, 9585.421875], "killer_coords": [6614.053711, 9566.109375]}, {"victim": "Hassan", "killer": "FJMorrys", "weapon": "Blaze", "distance": 90.8382, "victim_coords": [6421.208496, 10146.770508], "killer_coords": [6466.469238, 10073.788086]}, {"victim": "Mirek", "killer": "Anetka", "weapon": "KA-M", "distance": 90.6088, "victim_coords": [6441.956543, 10191.845703], "killer_coords": [6473.795898, 10113.124023]}, {"victim": "Jose", "killer": "FJMorrys", "weapon": "Blaze", "distance": 51.8775, "victim_coords": [10077.419922, 10312.392578], "killer_coords": [10115.390625, 10347.461914]}, {"victim": "Keiko", "killer": "FJMorrys", "weapon": "Blaze", "distance": 172.425, "victim_coords": [6246.866211, 4901.458008], "killer_coords": [6279.226074, 5070.806152]}, {"victim": "Gabi", "killer": "Anetka", "weapon": "KA-M", "distance": 75.3001, "victim_coords": [4297.562988, 7066.005371], "killer_coords": [4223.75293, 7075.454102]}, {"victim": "Judy", "killer": "FJMorrys", "weapon": "Blaze", "distance": 106.699, "victim_coords": [6048.507324, 4554.663574], "killer_coords": [5967.837402, 4624.469727]}, {"victim": "Peter", "killer": "FJMorrys", "weapon": "KA-74", "distance": 36.6321, "victim_coords": [6003.867676, 3719.252197], "killer_coords": [6015.106934, 3754.117432]}, {"victim": "Indar", "killer": "FJMorrys", "weapon": "KA-74", "distance": 34.3007, "victim_coords": [5999.918945, 3722.841064], "killer_coords": [5995.760254, 3756.865234]}];
+
+var markerLayer = L.layerGroup().addTo(map);
+var lineLayer = L.layerGroup().addTo(map);
+
+function getColor(killer, isLongest) {
+    if(isLongest) return "#FFD700";
+    if(killer.toLowerCase() === "anetka") return "#ff4da6";
+    if(killer.toLowerCase() === "fjmorrys") return "#3399ff";
+    return "#33ff77";
+}
+
+function render(selected="all") {
+
+    markerLayer.clearLayers();
+    lineLayer.clearLayers();
+
+    var filtered = kills.filter(k => selected==="all" || k.killer===selected);
+
+    var longest = 0;
+    if(filtered.length>0)
+        longest = Math.max(...filtered.map(k => k.distance));
+
+    filtered.forEach(k => {
+
+        var isLongest = k.distance === longest;
+        var color = getColor(k.killer, isLongest);
+        var size = isLongest ? 26 : 18;
+        var weight = isLongest ? 4 : 2;
+
+        var icon = L.divIcon({
+            className:'',
+            html:`<div style="
+                width:${size}px;
+                height:${size}px;
+                border-radius:50%;
+                background:${color};
+                border:2px solid white;
+                box-shadow:0 0 10px ${color},0 0 20px ${color};
+            "></div>`,
+            iconSize:[size,size],
+            iconAnchor:[size/2,size/2]
+        });
+
+        L.marker(k.victim_coords, {icon:icon})
+            .bindPopup(
+                "<b>Killer:</b> "+k.killer+
+                "<br><b>Victim:</b> AI "+k.victim+
+                "<br><b>Weapon:</b> "+k.weapon+
+                "<br><b>Distance:</b> "+k.distance.toFixed(2)+" m"
+            )
+            .addTo(markerLayer);
+
+        L.polyline([k.killer_coords,k.victim_coords], {
+            color:color,
+            weight:weight,
+            opacity:0.8
+        }).addTo(lineLayer);
+
+    });
+
+    document.getElementById("killCount").innerText = filtered.length;
+    document.getElementById("longestShot").innerText = longest.toFixed(2);
+}
+
+render();
+
+document.getElementById("playerFilter").addEventListener("change", function() {
+    render(this.value);
+});
+
+document.getElementById("toggleLines").addEventListener("change", function() {
+    if(this.checked)
+        map.addLayer(lineLayer);
+    else
+        map.removeLayer(lineLayer);
+});
+
+// SBALITELNÁ LEGENDA
+var legendBox = document.getElementById("legendBox");
+var toggleBtn = document.getElementById("toggleLegend");
+
+if(localStorage.getItem("legendCollapsed")==="true"){
+    legendBox.classList.add("collapsed");
+    toggleBtn.innerText="+";
+}
+
+toggleBtn.addEventListener("click", function(){
+    legendBox.classList.toggle("collapsed");
+
+    if(legendBox.classList.contains("collapsed")){
+        toggleBtn.innerText="+";
+        localStorage.setItem("legendCollapsed","true");
+    } else {
+        toggleBtn.innerText="−";
+        localStorage.setItem("legendCollapsed","false");
+    }
+});
+</script>
+</body>
+</html>
